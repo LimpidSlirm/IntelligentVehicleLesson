@@ -38,6 +38,7 @@
 #include "key_module.h"
 #include "motor.h"
 #include "speed_control.h"
+#include "servo.h"
 
 // ����TCϵ��Ĭ���ǲ�֧���ж�Ƕ�׵ģ�ϣ��֧���ж�Ƕ����Ҫ���ж���ʹ�� interrupt_global_enable(0); �������ж�Ƕ��
 // �򵥵�˵ʵ���Ͻ����жϺ�TCϵ�е�Ӳ���Զ������� interrupt_global_disable(); ���ܾ���Ӧ�κε��жϣ������Ҫ�����Լ��ֶ����� interrupt_global_enable(0); �������жϵ���Ӧ��
@@ -46,12 +47,19 @@
 IFX_INTERRUPT(cc60_pit_ch0_isr, 0, CCU6_0_CH0_ISR_PRIORITY)
 {
     static uint8 speed_control_tick;
+    static uint8 servo_tick;
 
     interrupt_global_enable(0);                     // �����ж�Ƕ��
     pit_clear_flag(CCU60_CH0);
 
     key_module_scan();                              // ����ɨ�裨״̬��������
     motor_update();
+    servo_tick++;
+    if(servo_tick >= 50U)
+    {
+        servo_tick = 0;
+        servo_update();
+    }
     speed_control_tick++;
     if(speed_control_tick >= 10U)
     {

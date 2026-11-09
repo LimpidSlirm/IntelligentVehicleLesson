@@ -114,4 +114,14 @@ void motor_stop(void)
     motor_right_target = 0;
 }
 
+void motor_stop_immediate(void)
+{
+    motor_left_target = 0;
+    motor_right_target = 0;
+    motor_left_current = 0;
+    motor_right_current = 0;
+    motor_apply_wheel(0, MOTOR_LEFT_A_PWM, MOTOR_LEFT_B_PWM);
+    motor_apply_wheel(0, MOTOR_RIGHT_A_PWM, MOTOR_RIGHT_B_PWM);
+}
+
 #pragma section all restore

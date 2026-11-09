@@ -17,4 +17,7 @@ void motor_update(void);
 /* Ramp both motors to zero. */
 void motor_stop(void);
 
+/* Immediately clear both motor PWM outputs. */
+void motor_stop_immediate(void);
+
 #endif

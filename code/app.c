@@ -1,25 +1,24 @@
 #include "app.h"
+#include "chassis.h"
 #include "key_module.h"
 #include "motor.h"
+#include "servo.h"
 #include "speed_control.h"
 #include "motion_interface.h"
 
 #pragma section all "cpu0_dsram"
 
-/* The debug key steps through closed-loop speed targets. */
-#define MOTOR_SPEED_LEVEL_NUM  (5U)
+#define SERVO_TEST_ANGLE_NUM  (3U)
 
-static const int16 motor_speed_levels[MOTOR_SPEED_LEVEL_NUM] =
+static const int16 servo_test_angles[SERVO_TEST_ANGLE_NUM] =
 {
-    0, 750, 1500, 2250, MOTOR_SPEED_MAX
+    SERVO_NEUTRAL_ANGLE, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX
 };
 
-static uint8 motor_speed_index;
-static uint8 motor_reverse;
-static uint8 motor_test_armed;
-static motion_command_t motion_command;
+static uint8 servo_test_index;
 static char uart_command[32];
 static uint8 uart_command_length;
+static int16 displayed_servo_angle;
 
 static void app_uart_show_status(const char *status)
 {
@@ -28,36 +27,21 @@ static void app_uart_show_status(const char *status)
     tft180_show_string(0, 48, status);
 }
 
-/* Apply the selected speed and direction to both wheels. */
-static void app_update_motor(void)
-{
-    int16 speed = motor_speed_levels[motor_speed_index];
-
-    if(motor_reverse != 0U)
-    {
-        speed = (int16)-speed;
-    }
-
-    motion_command.left_target = speed;
-    motion_command.right_target = speed;
-    motion_command.enable = motor_test_armed;
-    motion_command.safety_stop = 0U;
-    speed_control_set_command(&motion_command);
-}
-
 static void app_uart_send_status(void)
 {
-    static const char *speed_names[MOTOR_SPEED_LEVEL_NUM] =
-    {
-        "STOP", "LOW", "MID", "HIGH", "MAX"
-    };
-    const char *direction = (motor_reverse != 0U) ? "REV" : "FWD";
+    uart_write_string(UART_0, "STATUS DRIVE=DISABLED\r\n");
+}
 
-    uart_write_string(UART_0, "STATUS SPEED=");
-    uart_write_string(UART_0, speed_names[motor_speed_index]);
-    uart_write_string(UART_0, " DIR=");
-    uart_write_string(UART_0, direction);
-    uart_write_string(UART_0, "\r\n");
+static void app_update_servo_display(void)
+{
+    int16 angle = servo_get_current_angle();
+
+    displayed_servo_angle = angle;
+    tft180_set_color(RGB565_GREEN, RGB565_BLACK);
+    tft180_show_string(0, 64, "CMD");
+    tft180_show_int(24, 64, angle, 3);
+    tft180_show_string(64, 64, "TGT");
+    tft180_show_int(88, 64, servo_get_target_angle(), 3);
 }
 
 static void app_uart_process_byte(uint8 data)
@@ -126,15 +110,14 @@ void app_init(void)
     uart_write_string(UART_0, "BOOT OK\r\n");
 
     key_module_init();
-    motor_speed_index = 0;
-    motor_reverse = 0;
-    motor_test_armed = 0;
-    motion_command.left_target = 0;
-    motion_command.right_target = 0;
-    motion_command.enable = 0;
-    motion_command.safety_stop = 1U;
+    servo_test_index = 0U;
     motor_init();
     speed_control_init();
+    chassis_init();
+    servo_init();
+    chassis_stop_immediate();
+    displayed_servo_angle = (int16)-1;
+    app_update_servo_display();
 
     /* The PIT scans keys and updates the motor ramp every millisecond. */
     pit_ms_init(CCU60_CH0, 1);
@@ -145,42 +128,29 @@ void app_task(void)
     key_event_enum event;
 
     app_uart_task();
-
-    event = key_module_get_event(KEY_3);
-    if(event == KEY_EVT_SHORT)
-    {
-        motor_test_armed = 1;
-        /* KEY3 cycles through stop and four closed-loop speed targets. */
-        motor_speed_index++;
-        if(motor_speed_index >= MOTOR_SPEED_LEVEL_NUM)
-        {
-            motor_speed_index = 0;
-        }
-        app_update_motor();
-    }
+    app_update_servo_display();
 
     event = key_module_get_event(KEY_4);
     if(event == KEY_EVT_SHORT)
     {
-        if(motor_test_armed == 0U)
+        servo_test_index++;
+        if(servo_test_index >= SERVO_TEST_ANGLE_NUM)
         {
-            return;
+            servo_test_index = 0;
         }
-        /* KEY4 short press reverses both motors. */
-        motor_reverse = (uint8)!motor_reverse;
-        app_update_motor();
+        servo_set_angle(servo_test_angles[servo_test_index]);
     }
     else if(event == KEY_EVT_LONG)
     {
-        motor_test_armed = 1;
-        /* A long press requests a ramped stop. */
-        motion_command.left_target = 0;
-        motion_command.right_target = 0;
-        motion_command.enable = 1U;
-        motion_command.safety_stop = 0U;
-        speed_control_set_command(&motion_command);
-        motor_stop();
-        motor_speed_index = 0;
+        chassis_stop_immediate();
+        servo_center();
+        servo_test_index = 1U;
+    }
+
+    event = key_module_get_event(KEY_2);
+    if(event == KEY_EVT_SHORT || event == KEY_EVT_LONG)
+    {
+        servo_hold();
     }
 }
 

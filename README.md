@@ -48,6 +48,7 @@ The verified hardware mapping is:
 | 右轮编码器 / Right encoder | TIM6，P20.3 计数，P20.0 方向 |
 | KEY3 | P11.2 |
 | KEY4 | P11.3 |
+| 舵机 PWM / Servo PWM | P33.9，50 Hz |
 
 电机接口使用 A/B 双输入 H 桥逻辑。修改硬件映射前，请先核对驱动板、原理图和实际接线。
 
@@ -60,6 +61,8 @@ code/
     app.c/.h                 应用逻辑 / Application logic
     motor.c/.h               电机驱动 / Motor driver
     speed_control.c/.h       速度控制 / Speed control
+    chassis.c/.h             底盘接口 / Chassis interface
+    servo.c/.h               舵机接口 / Servo interface
     pid.c/.h                 PID 算法 / PID algorithm
     key_module.c/.h          按键模块 / Key module
     motion_interface.h       运动接口 / Motion interface
@@ -172,7 +175,11 @@ TC264 外设和硬件
 
 `app.c` 负责应用状态和运动命令；`speed_control.c` 负责读取反馈并运行左右轮速度控制；`pid.c` 提供通用 PID 算法；`motor.c` 负责将控制量转换为驱动器输出；中断统一放在 `user/isr.c`。
 
+`chassis.c` 提供线速度/角速度和左右轮目标速度接口，当前使用抽象定点速度单位；`servo.c` 提供角度限幅、回中和 50 Hz PWM 输出。两者目前只加入模块接口，尚未接入应用层控制流程。
+
 `app.c` manages application states and motion commands. `speed_control.c` reads feedback and runs the two wheel speed controllers. `pid.c` provides the reusable PID algorithm. `motor.c` converts control output into driver signals, while interrupt handlers are kept in `user/isr.c`.
+
+`chassis.c` provides linear/angular velocity and wheel-speed commands using abstract fixed-point units. `servo.c` provides angle limiting, centering, and 50 Hz PWM output. These modules currently exist as interfaces and are not connected to the application control flow.
 
 当前 PID 参数为：
 
@@ -189,6 +196,40 @@ KD = 0
 这些参数只适用于当前硬件和测试条件。更换电机、负载、供电或编码器后，需要重新验证和整定。
 
 These values are specific to the current hardware and test conditions. Retune and verify the controller after changing the motors, load, power supply, or encoders.
+
+### 5. 舵机按键测试（驱动轮关闭） | Servo Key Test (Drive Disabled)
+
+当前测试固件已关闭驱动轮，只保留舵机测试。烧录后不需要 UART。首次测试时舵机不要连接机械负载：
+
+The test firmware disables the drive wheels and keeps only servo testing enabled. UART is not required. Remove the servo load during the first test:
+
+```text
+KEY4 短按：90° -> 40° -> 140° -> 90°
+KEY4 长按：舵机回中，并立即停止驱动轮
+KEY2 短按或长按：停止转动并保持当前舵机状态
+
+舵机每 50 ms 调整 1°，约为每秒 20°，不会快速撞向目标角度；屏幕显示 `CMD` 软件当前输出角度和 `TGT` 目标角度。当前对称限位为 40° 到 140°，KEY4 测试两侧限位。普通舵机没有角度反馈，屏幕数值不是机械实际角度。
+
+The servo moves by 1° every 50 ms, approximately 20° per second, instead of jumping to the target. The display shows the current software output angle as `CMD` and the target as `TGT`. The symmetric limits are 40° and 140°, and KEY4 tests both sides. A standard servo has no angle feedback, so these values are not measured mechanical angles.
+```
+
+建议测试顺序：
+
+1. 上电后确认驱动轮不转。
+2. 短按 KEY4，观察屏幕角度逐步变化到 40°。
+3. 再次短按 KEY4，观察屏幕角度逐步变化到 140°。
+4. 再次短按 KEY4，观察屏幕角度逐步回到 90°。
+5. 短按 KEY4，确认舵机回中到当前配置的中位角。
+6. 舵机动作异常时立即断电。
+
+Recommended order:
+
+1. Confirm that the drive wheels remain stopped after power-on.
+2. Press KEY4 once and observe the displayed angle gradually move to 40°.
+3. Press KEY4 again and observe the displayed angle gradually move to 140°.
+4. Press KEY4 again and observe the displayed angle gradually return to 90°.
+5. Press KEY4 and confirm that the servo returns to the configured neutral angle.
+6. Remove power immediately if the servo behaves unexpectedly.
 
 ## 协作与提交 | Collaboration and Commits
 
