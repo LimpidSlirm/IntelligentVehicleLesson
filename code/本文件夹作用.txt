@@ -1,0 +1,3 @@
+Place user-written source and header files directly in this folder.
+Do not create additional subfolders here.
+Add each new source file to the IDE project so it is compiled and linked.
