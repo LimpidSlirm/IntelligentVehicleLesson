@@ -1,0 +1,39 @@
+# TASKING and embedded build output
+Debug/
+libraries/
+*.elf
+*.hex
+*.map
+*.mdf
+*.elf.opt
+*.opt
+*.o
+*.obj
+*.a
+*.lib
+*.srec
+
+# Build and flash logs
+*.log
+*.lst
+*.dep
+*.d
+*.aux
+*.out
+*.synctex.gz
+
+# Local IDE and workspace state
+.settings/
+.headless-workspace/
+
+# Python cache and local tooling output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+Thumbs.db
+Desktop.ini

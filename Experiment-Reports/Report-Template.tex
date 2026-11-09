@@ -1,0 +1,84 @@
+% !TeX program = xelatex
+\documentclass[11pt,a4paper,fontset=fandol]{ctexart}
+
+% ============================ 1. 基础页面设置 ================================
+\usepackage{geometry}
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+
+% ============================ 2. 数学基础包与标准定理 ========================
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{mathtools}
+\usepackage{bm}                       % 向量/矩阵加粗
+\allowdisplaybreaks                   % 长公式跨页
+
+% 标准学术定理环境（除定义外，其余均直接在正文中排版，无多余框线）
+\newtheorem{theorem}{定理}[section]
+\newtheorem{lemma}[theorem]{引理}
+\newtheorem{property}[theorem]{性质}
+\newtheorem{corollary}[theorem]{推论}
+
+\theoremstyle{remark}
+\newtheorem{remark}{注}[section]
+
+% ============================ 3. 字体设置 ====================================
+\usepackage{newtxtext}               % 英文 Times 系列
+\usepackage{newtxmath}               % 数学公式 Times 系列
+
+% ============================ 4. 仅定义使用的独立环境 ========================
+\usepackage[most]{tcolorbox}
+
+% 定义环境：学术极简浅灰底+细边框（单独突出）
+\newtcbtheorem[number within=section]{definition}{定义}{
+    enhanced,
+    boxrule=0.5pt,
+    arc=0pt,
+    colback=gray!4!white,
+    colframe=black!80,
+    fonttitle=\bfseries\sffamily,
+    coltitle=black,
+    attach boxed title to top left={yshift=-2mm, xshift=2mm},
+    boxed title style={boxrule=0pt, colframe=white, colback=white},
+    separator sign={\ },
+    description font=\normalfont
+}{def}
+
+% ============================ 5. 图表与列表 ==================================
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\setlist{nosep, leftmargin=2em}
+
+\usepackage{caption}
+\captionsetup{font=small, labelfont=bf, justification=centering}
+
+% ============================ 6. 超链接设置 ==================================
+\usepackage{hyperref}
+\usepackage{cleveref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=black,
+    urlcolor=black
+}
+
+% ============================ 7. 章节格式 ====================================
+\ctexset{
+    section/name={,},
+    section/number=\arabic{section},
+    section/format=\Large\bfseries,
+    subsection/number=\arabic{section}.\arabic{subsection},
+    subsection/format=\large\bfseries,
+    subsubsection/number=\arabic{section}.\arabic{subsection}.\arabic{subsubsection},
+    subsubsection/format=\normalsize\bfseries
+}
+
+\renewcommand{\baselinestretch}{1.15}
+\setlength{\parskip}{0.3em}
+\setlength{\parindent}{2em}
+
+% ============================ 8. 正文开始 ====================================
+\begin{document}
+
+
+
+\end{document}

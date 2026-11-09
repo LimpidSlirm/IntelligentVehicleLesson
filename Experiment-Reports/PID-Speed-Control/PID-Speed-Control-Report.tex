@@ -1,0 +1,410 @@
+% !TeX program = xelatex
+\documentclass[11pt,a4paper,fontset=fandol]{ctexart}
+
+\usepackage{geometry}
+\geometry{left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,linkcolor=black,urlcolor=black}
+\setlist{nosep,leftmargin=2em}
+\setlength{\tabcolsep}{3pt}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\baselinestretch}{1.15}
+\setlength{\parskip}{0.3em}
+\setlength{\parindent}{2em}
+\ctexset{
+    section/name={,},
+    section/number=\arabic{section},
+    section/format=\Large\bfseries,
+    subsection/number=\arabic{section}.\arabic{subsection},
+    subsection/format=\large\bfseries
+}
+\lstset{
+    basicstyle=\ttfamily\small,
+    frame=single,
+    breaklines=true,
+    columns=fullflexible
+}
+
+\title{\heiti 小车双轮速度 PID 控制模块实验报告}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-2em}
+
+\begin{center}
+\begin{tabular}{p{0.20\textwidth}p{0.64\textwidth}}
+\toprule
+实验平台 & TC264D 开发板、小车双轮电机、编码器及 H 桥驱动器 \\
+工程名称 & E01\_gpio\_demo \\
+控制目标 & 左右轮独立速度环，反馈单位为每 10\,ms 编码器脉冲数 \\
+实际按键 & KEY3=P11.2，KEY4=P11.3；KEY1、KEY2 不作为控制输入 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{实验目的}
+
+\begin{itemize}
+\item[\textbf{知识：}] 理解离散 PID 控制器、编码器增量测速、PWM 电机驱动、积分限幅和控制周期之间的关系。
+\item[\textbf{能力：}] 能够将通用 PID、编码器采样、双轮电机输出和按键目标设定拆分为独立模块，并完成编译、烧录和实车测试。
+\item[\textbf{素养：}] 培养根据硬件现象逐步验证引脚映射、先开环后闭环、记录真实测试结果和避免未经验证结论的工程习惯。
+\end{itemize}
+
+\section{实验原理}
+
+\subsection{编码器增量测速}
+
+本实验使用方向计数模式读取编码器。每个控制周期读取计数器增量并立即清零，将该周期内的脉冲数作为速度反馈：
+\[
+v[k] = C[k]-C[k-1].
+\]
+本项目控制周期为 $T_s=10\,\mathrm{ms}$，因此目标值和反馈值均采用“脉冲数/10\,ms”作为第一版调试单位，避免在编码器线数、减速比和轮径尚未完全确定时引入错误的 RPM 或线速度换算。
+
+\subsection{离散 PID}
+
+控制误差为
+\[
+e[k]=r[k]-v[k],
+\]
+其中 $r[k]$ 为目标速度，$v[k]$ 为编码器测得速度。程序采用位置式离散 PID：
+\[
+u[k]=K_p e[k]+K_i\sum_{i=0}^{k}e[i]+K_d(e[k]-e[k-1]).
+\]
+代码使用 \texttt{PID\_GAIN\_SCALE=1000} 对参数进行定点缩放。输出限制在 $[-5000,5000]$，对应电机驱动 PWM 的有符号目标值；积分项也进行上下限限制，防止积分无限增大。
+
+\subsection{H 桥 A/B 输出}
+
+实际电机驱动接口为两路 A/B 控制，而不是最初假设的“方向+PWM”。经过上机单轮测试后确认逻辑映射为：
+\[
+\begin{array}{c|cc}
+\text{逻辑电机} & A & B\\
+\hline
+\text{左轮} & P02.4 & P02.5\\
+\text{右轮} & P02.6 & P02.7
+\end{array}
+\]
+正向时 A 输出 PWM、B 输出 0；反向时 A 输出 0、B 输出 PWM。两路同时为 0 时停止输出。
+
+\section{需求分析与功能分解}
+
+\subsection{功能清单}
+
+\begin{enumerate}[label=\textbf{F\arabic*：}]
+\item 初始化左右轮 A/B PWM 输出、按键输入、编码器和 1\,ms PIT。
+\item 每 10\,ms 读取并清零左右编码器计数。
+\item 左右轮分别运行独立 PID，输出限制为电机允许的有符号 PWM 范围。
+\item KEY3 循环切换停止、LOW、MID、HIGH、MAX 五个速度目标。
+\item KEY4 短按切换前进/反向，长按清零目标并停止。
+\item 目标速度为 0 时清除对应 PID 积分和历史误差。
+\item 保留 1\,ms 电机缓启动，并通过实际编译、烧录和上机测试验证控制链路。
+\end{enumerate}
+
+\subsection{子阶段分解与验收计划}
+
+\begin{longtable}{p{0.10\textwidth}p{0.28\textwidth}p{0.40\textwidth}p{0.13\textwidth}}
+\caption{子阶段实施与验收计划}\\
+\toprule
+\textbf{阶段} & \textbf{工作内容} & \textbf{验收方法} & \textbf{结果}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{阶段} & \textbf{工作内容} & \textbf{验收方法} & \textbf{结果}\\
+\midrule
+\endhead
+1 & 需求与硬件接口确认 & 确认编码器、按键、电机和驱动器引脚 & 完成\\
+2 & 开环电机验证 & 单轮、双轮、方向和停止测试 & 通过\\
+3 & PID 模块实现 & 编译并检查独立 PID 和速度控制模块 & 通过\\
+4 & 工程集成 & PIT 10\,ms 更新、按键目标设定和电机输出 & 编译通过\\
+5 & 烧录验证 & AURIX Flasher 擦除、编程和校验 & 通过\\
+6 & 实车 PID 测试 & 按目标档位、方向和停止流程测试 & 用户确认完成\\
+\bottomrule
+\end{longtable}
+
+\section{系统设计}
+
+\subsection{系统架构}
+
+系统由应用层、速度控制层、电机驱动层、编码器驱动和周期中断组成。CPU0 启动后执行 \texttt{app\_init()}，初始化按键、电机、编码器和 PID；主循环处理 KEY3/KEY4 事件；CCU60\_CH0 每 1\,ms 扫描按键、更新电机缓启动，每累计 10 次执行一次速度 PID。
+
+\begin{center}
+\begin{tabularx}{0.96\textwidth}{>{\centering\arraybackslash}X}
+\toprule
+CPU0 启动 $\rightarrow$ \texttt{app\_init()}：初始化按键、电机、编码器、PID 和 PIT\\
+主循环 \texttt{app\_task()}：读取 KEY3/KEY4，更新左右轮目标速度\\
+CCU60\_CH0 PIT：每 1\,ms 执行按键扫描和电机缓启动；每 10\,ms 执行 \texttt{speed\_control\_update()}\\
+\texttt{speed\_control\_update()}：读取 TIM5/TIM6 计数，分别计算左右 PID 并调用 \texttt{motor\_set()}\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\subsection{接口定义}
+
+\small
+\begin{longtable}{p{0.22\textwidth}p{0.37\textwidth}p{0.29\textwidth}}
+\caption{模块接口定义}\\
+\toprule
+\textbf{模块} & \textbf{接口} & \textbf{作用}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{模块} & \textbf{接口} & \textbf{作用}\\
+\midrule
+\endhead
+PID & \texttt{pid\_init()} & 设置 PID 参数、输出限幅并清零状态\\
+PID & \texttt{pid\_reset()} & 清除积分、历史误差和输出\\
+PID & \texttt{pid\_update()} & 根据目标和测量值计算一次输出\\
+速度控制 & \texttt{speed\_control\_init()} & 初始化 TIM5/TIM6 编码器和左右 PID\\
+速度控制 & \texttt{speed\_control\_set\_target()} & 设置左右轮目标速度\\
+速度控制 & \texttt{speed\_control\_update()} & 采样编码器并更新左右轮 PID\\
+电机 & \texttt{motor\_set()} & 设置左右轮有符号目标输出\\
+电机 & \texttt{motor\_update()} & 每 1\,ms 使当前输出接近目标输出\\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\subsection{关键硬件映射}
+
+\begin{longtable}{p{0.24\textwidth}p{0.28\textwidth}p{0.32\textwidth}}
+\caption{实际测试采用的硬件映射}\\
+\toprule
+\textbf{功能} & \textbf{端口} & \textbf{说明}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{功能} & \textbf{端口} & \textbf{说明}\\
+\midrule
+\endhead
+左轮 A/B & P02.4/P02.5 & A 输出 PWM，B 输出 0；反向时交换\\
+右轮 A/B & P02.6/P02.7 & A 输出 PWM，B 输出 0；反向时交换\\
+左轮编码器 & TIM5：P10.3/P10.1 & P10.3 计数，P10.1 方向\\
+右轮编码器 & TIM6：P20.3/P20.0 & P20.3 计数，P20.0 方向\\
+KEY3/KEY4 & P11.2/P11.3 & 上拉输入，按下低电平有效\\
+\bottomrule
+\end{longtable}
+
+\section{AI 辅助开发过程记录}
+
+本次开发采用“确认需求 $\rightarrow$ 核对硬件 $\rightarrow$ 开环测试 $\rightarrow$ 闭环测试”的方式。AI 先逐项确认速度环、反馈传感器、控制周期、双轮独立 PID、目标单位和启停行为；随后根据实际测试现象修正了按键引脚、电机 H 桥接口、左右轮映射和 A/B 极性。每次修改后均先编译，涉及硬件时再执行烧录。
+
+对话中的关键纠错过程如下：
+
+\begin{itemize}
+\item 初始将电机接口理解为“方向+PWM”，实测发现右轮、左轮动作与档位不符。
+\item 用户确认板上接口为 \texttt{1-A--GND--1-B}、\texttt{2-A--GND--2-B}，因此将驱动改为 A/B 双 PWM。
+\item 首次 A/B 分组测试出现左右轮顺序相反且两轮反转；交换两组逻辑映射和 A/B 输出后，用户确认“现象正常了”。
+\item UART 回传未能稳定使用，因此测试过程主要依靠按键、TFT 和电机实际动作完成。
+\end{itemize}
+
+\subsection{对话原文保留说明}
+
+本报告附录保留本次 PID 开发对话的用户消息和助手答复原文；工具输出、系统状态和不可见控制信息不属于面向用户的对话原文。完整历史记录另见工程根目录的 \texttt{AI对话日志.md}。
+
+\section{模块实现说明}
+
+\subsection{文件组织}
+
+\begin{itemize}
+\item \texttt{code/pid.h}、\texttt{code/pid.c}：通用定点缩放 PID。
+\item \texttt{code/speed\_control.h}、\texttt{code/speed\_control.c}：编码器采样和左右轮独立速度环。
+\item \texttt{code/motor.h}、\texttt{code/motor.c}：A/B 双输入 H 桥 PWM 与 1\,ms 缓启动。
+\item \texttt{code/app.c}：按键目标速度和方向控制。
+\item \texttt{user/isr.c}：统一放置 PIT 中断函数。
+\end{itemize}
+
+\subsection{参数}
+
+\begin{lstlisting}
+#define SPEED_CONTROL_KP  (1000)
+#define SPEED_CONTROL_KI  (40)
+#define SPEED_CONTROL_KD  (0)
+#define PID_GAIN_SCALE    (1000)
+\end{lstlisting}
+
+当前参数是首次上车调试用的保守参数，不代表最终最优参数。后续如果需要提高速度跟踪精度，应基于实际的 \texttt{STATUS} 反馈或其他测量方式重新整定。
+
+\section{调试与问题记录}
+
+\small
+\begin{longtable}{p{0.24\textwidth}p{0.25\textwidth}p{0.31\textwidth}p{0.12\textwidth}}
+\caption{调试问题记录}\\
+\toprule
+\textbf{现象} & \textbf{假设} & \textbf{验证与处理} & \textbf{结论}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{现象} & \textbf{假设} & \textbf{验证与处理} & \textbf{结论}\\
+\midrule
+\endhead
+UART 打开 COM9 失败 & 串口号不正确 & 改用 COM14；板上出现 RX DATA，说明接收链路可用，但未稳定收到 PONG & UART 未作为主要测试手段\\
+开环时只有一个轮转动 & 电机映射或方向/PWM 假设错误 & 进行左右轮单独档位测试并核对驱动板标记 & 需要按实际 H 桥 A/B 接口重构输出\\
+电机上电后异常转动 & PWM/方向接口理解不准确，且缺少启动保护 & 增加 PWM 清零和启动锁定；继续确认驱动器接口 & 暴露出原接口假设问题\\
+板上标注为 A--GND--B & 驱动器是双输入 H 桥 & 将 motor.c 改为两路 A/B PWM，禁止两路同时有效 & 接口模型修正\\
+第一次 A/B 测试左右轮顺序相反且反转 & 左右逻辑分组和 A/B 极性相反 & 交换左右通道并交换两组 A/B 输出 & 用户确认“现象正常了”\\
+PID 版本需要周期性反馈 & 闭环必须在固定周期采样编码器 & 1\,ms PIT 累计 10 次执行速度控制更新 & 形成 10\,ms 独立双轮速度环\\
+\bottomrule
+\end{longtable}
+\normalsize
+
+\section{结果与验收}
+
+\begin{longtable}{p{0.08\textwidth}p{0.25\textwidth}p{0.35\textwidth}p{0.22\textwidth}}
+\caption{功能验收表}\\
+\toprule
+\textbf{编号} & \textbf{验收项目} & \textbf{验收标准} & \textbf{结果/来源}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{编号} & \textbf{验收项目} & \textbf{验收标准} & \textbf{结果/来源}\\
+\midrule
+\endhead
+F1 & 电机 A/B 映射 & 单轮、双轮和方向动作与逻辑一致 & 通过；用户实车确认现象正常\\
+F2 & 编码器接入 & TIM5/TIM6 分别接入左右轮反馈 & 已接入；硬件映射按用户确认\\
+F3 & PID 周期 & 每 10\,ms 读取计数并更新左右 PID & 通过；代码集成并编译通过\\
+F4 & 速度档位 & KEY3 循环改变左右轮目标速度 & 已实现；用户完成 PID 测试\\
+F5 & 方向切换 & KEY4 改变两轮目标方向 & 已实现；上板流程完成\\
+F6 & 停止保护 & 长按 KEY4 清零目标并复位 PID 积分 & 已实现；代码检查通过\\
+F7 & 工程构建 & 无编译和链接错误 & 通过；0 errors, 0 warnings\\
+F8 & 烧录校验 & 编程、校验和 Flash 匹配成功 & 通过；AURIX Flasher 全部 Pass\\
+F9 & PID 实车测试 & 按测试流程完成速度环测试 & 完成；用户反馈“测试完毕了”\\
+\bottomrule
+\end{longtable}
+
+\noindent\textbf{结论：}本实验完成了基于 TC264D 的双轮独立速度 PID 模块。实际开发中先通过开环测试确认 A/B H 桥映射，再恢复闭环控制；工程编译、烧录和校验均通过，用户完成了 PID 上机测试。由于 UART 回传没有稳定使用，本报告不虚构具体编码器数值和最终最优 PID 参数。
+
+\appendix
+\section{本次 PID 开发对话原文}
+
+\noindent\textbf{说明：}以下保留本次任务中面向用户的对话原文，按时间顺序整理；代码块和路径按原答复保留。
+
+\subsection*{用户：}
+我现在要给我的小车写pid模块，请你逐步跟我确认要求，然后帮我完成相关模块。
+
+\subsection*{助手：}
+我先确认现有工程结构和 \texttt{app.c} 的控制入口，再逐项和你确认 PID 的目标、输入输出与运行周期；确认完再动代码。
+
+\subsection*{用户：}
+速度环，反馈传感器是 encoder\_dir\_init，输出是左右轮 PWM，控制周期请建议。
+
+\subsection*{助手：}
+已确认第一阶段做“编码器速度环”，PID 输出直接作用于左右轮 PWM；我接着核对工程里 \texttt{encoder\_dir\_init}、电机 PWM 和 PIT 回调的现有接口，避免重复造轮子，再确认速度单位和双轮控制方式。
+
+\subsection*{用户：}
+我只知道一个10.3是G，10.1是3v3，右轮是20.3是G，20.0是3v3。
+
+\subsection*{助手：}
+这里有一个必须先解决的硬件信息缺口：你给出的 P10.3/G、P10.1/3V3 以及 P20.3/G、P20.0/3V3 看起来是供电/地或电源相关引脚，不是编码器 A/B 信号。PID 代码必须知道左右编码器的脉冲信号脚，否则无法正确读取速度；我先查工程里的引脚分配说明。
+
+\subsection*{用户：}
+确认这些是编码器信号，左轮 TIM5 P10.3/P10.1，右轮 TIM6 P20.3/P20.0，正转计数方向未知。
+
+\subsection*{助手：}
+硬件映射已明确：左轮用 TIM5（P10.3/P10.1），右轮用 TIM6（P20.3/P20.0）；正转计数符号先做成可配置，避免第一次上车时方向相反导致 PID 饱和。
+
+\subsection*{用户：}
+只保留按键控制目标速度，保留现有 1 ms 缓启动，PID 每 10 ms 更新，先用保守默认参数，后续串口调参。
+
+\subsection*{助手：}
+需求已经足够明确，我开始实现：新增通用 PID 模块；左/右轮分别用 TIM5/TIM6 计数；每 10 ms 在 PIT 中断中读取并清零编码器计数、更新 PID、调用现有 \texttt{motor\_set()}；保留 1 ms 电机缓启动。
+
+\subsection*{用户：}
+先不用 PID，我先测试两个电机能否正常转动。
+
+\subsection*{助手：}
+我把当前运行路径临时切回开环电机测试：按键目标直接送给 \texttt{motor\_set()}，停用编码器/PID 初始化和 10 ms PID 更新；PID 文件保留，之后可以再切回闭环。
+
+\subsection*{用户：}
+现在只有左轮转，且反向。
+
+\subsection*{助手：}
+这个现象说明开环控制已经有输出，但有两个问题：正在转动的左轮方向相反；右轮没有转动。建议先不要改 PID，先把开环测试改成“单轮分步测试”。
+
+\subsection*{用户：}
+可以，编译并烧录。
+
+\subsection*{助手：}
+已完成编译和烧录。每次短按 KEY3 循环：STOP、LEFT、RIGHT、BOTH；KEY4 短按切换方向，长按停止。
+
+\subsection*{用户：}
+现在一打开右轮就会转。
+
+\subsection*{助手：}
+按当前代码，上电初始状态应为两路 PWM 为 0；建议增加启动锁定和显式 PWM 清零，以排除启动瞬间误触发。
+
+\subsection*{用户：}
+我猜测是引脚问题。
+
+\subsection*{助手：}
+你的判断很可能是对的。当前现象与“软件档位顺序错误”不完全一致，更像是 P02.4/P02.5/P02.6/P02.7 与实际电机驱动输入的对应关系不一致。
+
+\subsection*{用户：}
+现在板上写的是2.4G2.5 2.6G2.7。
+
+\subsection*{助手：}
+板上标注为两组 P02.4-G-P02.5、P02.6-G-P02.7，G 大概率表示 GND。
+
+\subsection*{用户：}
+1-A GND 1-B。
+
+\subsection*{助手：}
+明白，第一组是 1-A-GND-1-B，这表示 P02.4 和 P02.5 很可能分别接到电机驱动器的 1-A、1-B，中间 GND 是地线。
+
+\subsection*{用户：}
+2.7应该是1-A。
+
+\subsection*{助手：}
+明白，目前确认 P02.7 → 1-A。这说明当前软件定义不一定正确，因为 P02.7 实际是电机驱动的 1-A 输入，而不是普通 PWM 输入。
+
+\subsection*{用户：}
+是。
+
+\subsection*{助手：}
+确认了，这是双输入 H 桥接口：1-A/1-B 和 2-A/2-B。需要改成双输入 H 桥控制方式。
+
+\subsection*{用户：}
+应该2.6和2.7是一组，上机测试一下。
+
+\subsection*{助手：}
+按这个假设将 P02.6/P02.7 作为一组、P02.4/P02.5 作为另一组，并采用一路 PWM、另一路置低的 A/B 控制方式；随后编译烧录。
+
+\subsection*{用户：}
+第一次是右轮，第二次是左轮，现在两个轮子都是反转的。
+
+\subsection*{助手：}
+现象说明软件左右通道对应反了，而且两组 A/B 的正向极性都反了；交换左右轮并交换两组 A/B 输出。
+
+\subsection*{用户：}
+现象正常了。
+
+\subsection*{助手：}
+说明当前电机控制映射已经正确：左右轮对应正确，A/B 控制方向正确，正转方向正常。
+
+\subsection*{用户：}
+现在开始测试pid。
+
+\subsection*{助手：}
+恢复闭环速度控制，但保留刚验证正确的 motor.c 引脚映射。PID 按 10 ms 更新，KEY3 改回双轮目标速度档位，KEY4 保留方向/长按停止；然后编译烧录。
+
+\subsection*{用户：}
+我该怎么测试，什么现象说明测试结果正常。
+
+\subsection*{助手：}
+建议架空小车，先确认上电两轮不转，再逐档按 KEY3；正常现象是启动平稳、转速稳定、左右轮方向一致、档位变化合理、停止后不重新启动。若持续加速、输出饱和、明显抖动或方向相反，应立即长按 KEY4 或断电。
+
+\subsection*{用户：}
+测试完毕了。
+
+\subsection*{助手：}
+本次 PID 测试完成，报告按模板整理，并保留本次对话原文。
+
+\end{document}
