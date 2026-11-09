@@ -1,5 +1,5 @@
-#ifndef LED_STRIP_H
-#define LED_STRIP_H
+#ifndef LED_H
+#define LED_H
 
 #include "zf_common_headfile.h"
 
