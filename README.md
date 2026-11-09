@@ -60,12 +60,12 @@ The motor interface uses dual-input A/B H-bridge logic. Verify the driver board,
 code/
     app.c/.h                 应用逻辑 / Application logic
     motor.c/.h               电机驱动 / Motor driver
-    speed_control.c/.h       速度控制 / Speed control
+    speed.c/.h               速度控制 / Speed control
     chassis.c/.h             底盘接口 / Chassis interface
     servo.c/.h               舵机接口 / Servo interface
     pid.c/.h                 PID 算法 / PID algorithm
-    key_module.c/.h          按键模块 / Key module
-    motion_interface.h       运动接口 / Motion interface
+    key.c/.h                 按键模块 / Key module
+    motion.h                 运动接口 / Motion interface
 
 user/
     cpu0_main.c/.h           CPU0 入口 / CPU0 entry
@@ -166,20 +166,20 @@ The project uses a layered design with explicit interfaces:
 ```text
 应用层 app.c
     ↓ 运动命令和运行模式
-控制层 speed_control.c / pid.c
+控制层 speed.c / pid.c
     ↓ 控制输出
-设备层 motor.c / encoder / key_module.c
+设备层 motor.c / encoder / key.c
     ↓
 TC264 外设和硬件
 ```
 
-`app.c` 负责应用状态和运动命令；`speed_control.c` 负责读取反馈并运行左右轮速度控制；`pid.c` 提供通用 PID 算法；`motor.c` 负责将控制量转换为驱动器输出；中断统一放在 `user/isr.c`。
+`app.c` 负责应用状态和运动命令；`speed.c` 负责读取反馈并运行左右轮速度控制；`pid.c` 提供通用 PID 算法；`motor.c` 负责将控制量转换为驱动器输出；中断统一放在 `user/isr.c`。
 
 `chassis.c` 提供线速度/角速度、左右轮目标速度和转向角接口，当前使用抽象定点速度单位；`servo.c` 提供 50 Hz PWM 和渐变输出。底盘测试应用通过底盘接口统一控制驱动轮和舵机。
 
 底盘模块同时管理整车转向限幅：转向角范围为 40° 到 140°，中位为 90°；`servo.c` 只负责通用舵机 PWM 和渐变输出。应用层应通过 `chassis_set_steering_angle()` 设置转向角，不应直接绕过底盘限幅调用舵机接口。
 
-`app.c` manages application states and motion commands. `speed_control.c` reads feedback and runs the two wheel speed controllers. `pid.c` provides the reusable PID algorithm. `motor.c` converts control output into driver signals, while interrupt handlers are kept in `user/isr.c`.
+`app.c` manages application states and motion commands. `speed.c` reads feedback and runs the two wheel speed controllers. `pid.c` provides the reusable PID algorithm. `motor.c` converts control output into driver signals, while interrupt handlers are kept in `user/isr.c`.
 
 `chassis.c` provides linear/angular velocity, wheel-speed, and steering-angle commands using abstract fixed-point units. `servo.c` provides 50 Hz PWM and ramp output. The chassis test application uses the chassis interface for both drive wheels and steering.
 

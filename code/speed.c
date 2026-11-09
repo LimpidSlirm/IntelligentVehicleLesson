@@ -1,4 +1,4 @@
-#include "speed_control.h"
+#include "speed.h"
 #include "motor.h"
 #include "pid.h"
 

@@ -2,7 +2,7 @@
 #define SPEED_CONTROL_H
 
 #include "zf_driver_encoder.h"
-#include "motion_interface.h"
+#include "motion.h"
 
 void speed_control_init(void);
 void speed_control_set_command(const motion_command_t *command);

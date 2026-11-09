@@ -1,10 +1,10 @@
 #include "app.h"
 #include "chassis.h"
-#include "key_module.h"
+#include "key.h"
 #include "motor.h"
 #include "servo.h"
-#include "speed_control.h"
-#include "motion_interface.h"
+#include "speed.h"
+#include "motion.h"
 
 #pragma section all "cpu0_dsram"
 

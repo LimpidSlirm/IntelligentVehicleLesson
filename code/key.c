@@ -1,4 +1,4 @@
-#include "key_module.h"
+#include "key.h"
 
 #pragma section all "cpu0_dsram"
 

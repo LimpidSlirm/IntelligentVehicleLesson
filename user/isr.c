@@ -35,9 +35,9 @@
 
 #include "isr_config.h"
 #include "isr.h"
-#include "key_module.h"
+#include "key.h"
 #include "motor.h"
-#include "speed_control.h"
+#include "speed.h"
 #include "servo.h"
 
 // ����TCϵ��Ĭ���ǲ�֧���ж�Ƕ�׵ģ�ϣ��֧���ж�Ƕ����Ҫ���ж���ʹ�� interrupt_global_enable(0); �������ж�Ƕ��

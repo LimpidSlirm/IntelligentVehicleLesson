@@ -1,7 +1,7 @@
 #include "chassis.h"
 #include "motor.h"
 #include "servo.h"
-#include "speed_control.h"
+#include "speed.h"
 
 static int16 chassis_limit(int32 value)
 {

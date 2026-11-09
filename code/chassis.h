@@ -1,7 +1,7 @@
 #ifndef CHASSIS_H
 #define CHASSIS_H
 
-#include "motion_interface.h"
+#include "motion.h"
 
 /* Abstract speed units are intentionally kept independent of wheel geometry. */
 #define CHASSIS_TRACK_WIDTH_UNITS  (1000)
