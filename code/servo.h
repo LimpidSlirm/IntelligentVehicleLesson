@@ -3,8 +3,8 @@
 
 #include "zf_common_headfile.h"
 
-#define SERVO_ANGLE_MIN       (40)
-#define SERVO_ANGLE_MAX       (140)
+#define SERVO_ANGLE_MIN       (0)
+#define SERVO_ANGLE_MAX       (180)
 #define SERVO_NEUTRAL_ANGLE   (90)
 
 /* These defaults are common analog-servo values; verify them for the device. */

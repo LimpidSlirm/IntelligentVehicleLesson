@@ -1,31 +1,46 @@
 #include "chassis.h"
 #include "motor.h"
+#include "servo.h"
 #include "speed_control.h"
 
 static int16 chassis_limit(int32 value)
 {
-    if(value > 32767)
+    if(value > CHASSIS_SPEED_MAX)
     {
-        return 32767;
+        return CHASSIS_SPEED_MAX;
     }
-    if(value < -32768)
+    if(value < -CHASSIS_SPEED_MAX)
     {
-        return -32768;
+        return (int16)-CHASSIS_SPEED_MAX;
     }
     return (int16)value;
+}
+
+static int16 chassis_limit_steering(int16 angle)
+{
+    if(angle < CHASSIS_STEERING_MIN)
+    {
+        return CHASSIS_STEERING_MIN;
+    }
+    if(angle > CHASSIS_STEERING_MAX)
+    {
+        return CHASSIS_STEERING_MAX;
+    }
+    return angle;
 }
 
 void chassis_init(void)
 {
     chassis_stop_immediate();
+    chassis_center_steering();
 }
 
 void chassis_set_wheel_speed(int16 left, int16 right)
 {
     motion_command_t command;
 
-    command.left_target = left;
-    command.right_target = right;
+    command.left_target = chassis_limit(left);
+    command.right_target = chassis_limit(right);
     command.enable = 1U;
     command.safety_stop = 0U;
     speed_control_set_command(&command);
@@ -58,4 +73,14 @@ void chassis_stop_immediate(void)
     command.safety_stop = 1U;
     speed_control_set_command(&command);
     motor_stop_immediate();
+}
+
+void chassis_set_steering_angle(int16 angle)
+{
+    servo_set_angle(chassis_limit_steering(angle));
+}
+
+void chassis_center_steering(void)
+{
+    chassis_set_steering_angle(CHASSIS_STEERING_NEUTRAL);
 }

@@ -109,9 +109,9 @@ void app_init(void)
     chassis_test_mode = 0U;
     motor_init();
     speed_control_init();
-    chassis_init();
     servo_init();
-    servo_center();
+    chassis_init();
+    chassis_center_steering();
     chassis_stop_immediate();
     displayed_servo_angle = (int16)-1;
     app_update_servo_display();

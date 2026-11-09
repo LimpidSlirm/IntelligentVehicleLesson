@@ -175,12 +175,15 @@ TC264 外设和硬件
 
 `app.c` 负责应用状态和运动命令；`speed_control.c` 负责读取反馈并运行左右轮速度控制；`pid.c` 提供通用 PID 算法；`motor.c` 负责将控制量转换为驱动器输出；中断统一放在 `user/isr.c`。
 
-`chassis.c` 提供线速度/角速度和左右轮目标速度接口，当前使用抽象定点速度单位；`servo.c` 提供角度限幅、回中和 50 Hz PWM 输出。两者目前只加入模块接口，尚未接入应用层控制流程。
+`chassis.c` 提供线速度/角速度、左右轮目标速度和转向角接口，当前使用抽象定点速度单位；`servo.c` 提供 50 Hz PWM 和渐变输出。底盘测试应用通过底盘接口统一控制驱动轮和舵机。
+
+底盘模块同时管理整车转向限幅：转向角范围为 40° 到 140°，中位为 90°；`servo.c` 只负责通用舵机 PWM 和渐变输出。应用层应通过 `chassis_set_steering_angle()` 设置转向角，不应直接绕过底盘限幅调用舵机接口。
 
 `app.c` manages application states and motion commands. `speed_control.c` reads feedback and runs the two wheel speed controllers. `pid.c` provides the reusable PID algorithm. `motor.c` converts control output into driver signals, while interrupt handlers are kept in `user/isr.c`.
 
-`chassis.c` provides linear/angular velocity and wheel-speed commands using abstract fixed-point units. `servo.c` provides angle limiting, centering, and 50 Hz PWM output. These modules currently exist as interfaces and are not connected to the application control flow.
+`chassis.c` provides linear/angular velocity, wheel-speed, and steering-angle commands using abstract fixed-point units. `servo.c` provides 50 Hz PWM and ramp output. The chassis test application uses the chassis interface for both drive wheels and steering.
 
+The chassis module also owns the vehicle steering limits: 40° to 140° with 90° as neutral. `servo.c` only provides generic servo PWM and ramp output. Application code should use `chassis_set_steering_angle()` so the chassis limit cannot be bypassed.
 当前 PID 参数为：
 
 The current PID parameters are:
