@@ -8,14 +8,10 @@
 
 #pragma section all "cpu0_dsram"
 
-#define SERVO_TEST_ANGLE_NUM  (3U)
+#define CHASSIS_TEST_MODE_NUM  (3U)
+#define CHASSIS_TEST_SPEED     (300)
 
-static const int16 servo_test_angles[SERVO_TEST_ANGLE_NUM] =
-{
-    SERVO_NEUTRAL_ANGLE, SERVO_ANGLE_MIN, SERVO_ANGLE_MAX
-};
-
-static uint8 servo_test_index;
+static uint8 chassis_test_mode;
 static char uart_command[32];
 static uint8 uart_command_length;
 static int16 displayed_servo_angle;
@@ -110,11 +106,12 @@ void app_init(void)
     uart_write_string(UART_0, "BOOT OK\r\n");
 
     key_module_init();
-    servo_test_index = 0U;
+    chassis_test_mode = 0U;
     motor_init();
     speed_control_init();
     chassis_init();
     servo_init();
+    servo_center();
     chassis_stop_immediate();
     displayed_servo_angle = (int16)-1;
     app_update_servo_display();
@@ -130,27 +127,36 @@ void app_task(void)
     app_uart_task();
     app_update_servo_display();
 
-    event = key_module_get_event(KEY_4);
-    if(event == KEY_EVT_SHORT)
-    {
-        servo_test_index++;
-        if(servo_test_index >= SERVO_TEST_ANGLE_NUM)
-        {
-            servo_test_index = 0;
-        }
-        servo_set_angle(servo_test_angles[servo_test_index]);
-    }
-    else if(event == KEY_EVT_LONG)
-    {
-        chassis_stop_immediate();
-        servo_center();
-        servo_test_index = 1U;
-    }
-
     event = key_module_get_event(KEY_2);
     if(event == KEY_EVT_SHORT || event == KEY_EVT_LONG)
     {
-        servo_hold();
+        chassis_stop_immediate();
+        chassis_test_mode = 0U;
+    }
+
+    event = key_module_get_event(KEY_4);
+    if(event == KEY_EVT_SHORT || event == KEY_EVT_LONG)
+    {
+        chassis_test_mode++;
+        if(chassis_test_mode >= CHASSIS_TEST_MODE_NUM)
+        {
+            chassis_test_mode = 0U;
+        }
+
+        if(chassis_test_mode == 1U)
+        {
+            chassis_set_wheel_speed(-CHASSIS_TEST_SPEED,
+                                    CHASSIS_TEST_SPEED);
+        }
+        else if(chassis_test_mode == 2U)
+        {
+            chassis_set_wheel_speed(CHASSIS_TEST_SPEED,
+                                    -CHASSIS_TEST_SPEED);
+        }
+        else
+        {
+            chassis_stop_ramped();
+        }
     }
 }
 

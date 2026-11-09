@@ -197,39 +197,35 @@ KD = 0
 
 These values are specific to the current hardware and test conditions. Retune and verify the controller after changing the motors, load, power supply, or encoders.
 
-### 5. 舵机按键测试（驱动轮关闭） | Servo Key Test (Drive Disabled)
+### 5. 底盘按键测试（舵机回中） | Chassis Key Test (Servo Centered)
 
-当前测试固件已关闭驱动轮，只保留舵机测试。烧录后不需要 UART。首次测试时舵机不要连接机械负载：
+当前测试固件使用 KEY4 测试底盘，舵机固定回中，KEY3 不使用，KEY2 为立即停止。首次测试时必须让驱动轮离地：
 
-The test firmware disables the drive wheels and keeps only servo testing enabled. UART is not required. Remove the servo load during the first test:
+The test firmware uses KEY4 for chassis testing, centers the servo, does not use KEY3, and assigns KEY2 to emergency stop. Keep the drive wheels off the ground during the first test:
 
 ```text
-KEY4 短按：90° -> 40° -> 140° -> 90°
-KEY4 长按：舵机回中，并立即停止驱动轮
-KEY2 短按或长按：停止转动并保持当前舵机状态
-
-舵机每 50 ms 调整 1°，约为每秒 20°，不会快速撞向目标角度；屏幕显示 `CMD` 软件当前输出角度和 `TGT` 目标角度。当前对称限位为 40° 到 140°，KEY4 测试两侧限位。普通舵机没有角度反馈，屏幕数值不是机械实际角度。
-
-The servo moves by 1° every 50 ms, approximately 20° per second, instead of jumping to the target. The display shows the current software output angle as `CMD` and the target as `TGT`. The symmetric limits are 40° and 140°, and KEY4 tests both sides. A standard servo has no angle feedback, so these values are not measured mechanical angles.
+KEY4 短按第 1 次：停止 -> 原地左转
+KEY4 短按第 2 次：原地左转 -> 原地右转
+KEY4 短按第 3 次：原地右转 -> 停止
+KEY2 短按或长按：立即停止
+测试速度：300
 ```
 
 建议测试顺序：
 
-1. 上电后确认驱动轮不转。
-2. 短按 KEY4，观察屏幕角度逐步变化到 40°。
-3. 再次短按 KEY4，观察屏幕角度逐步变化到 140°。
-4. 再次短按 KEY4，观察屏幕角度逐步回到 90°。
-5. 短按 KEY4，确认舵机回中到当前配置的中位角。
-6. 舵机动作异常时立即断电。
+1. 上电后确认舵机回到 90°，驱动轮不转。
+2. 驱动轮离地，短按 KEY4，确认两轮原地左转。
+3. 短按 KEY4，确认两轮原地右转。
+4. 短按 KEY4，确认两轮停止。
+5. 任意异常时按 KEY2；仍异常时立即断电。
 
 Recommended order:
 
-1. Confirm that the drive wheels remain stopped after power-on.
-2. Press KEY4 once and observe the displayed angle gradually move to 40°.
-3. Press KEY4 again and observe the displayed angle gradually move to 140°.
-4. Press KEY4 again and observe the displayed angle gradually return to 90°.
-5. Press KEY4 and confirm that the servo returns to the configured neutral angle.
-6. Remove power immediately if the servo behaves unexpectedly.
+1. Confirm that the servo centers at 90° and the drive wheels remain stopped after power-on.
+2. Keep the drive wheels off the ground and press KEY4 once to verify an in-place left turn.
+3. Press KEY4 again to verify an in-place right turn.
+4. Press KEY4 again to verify a stop.
+5. Press KEY2 for any abnormal behavior, and remove power if necessary.
 
 ## 协作与提交 | Collaboration and Commits
 
