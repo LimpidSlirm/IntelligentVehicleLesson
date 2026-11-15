@@ -25,6 +25,9 @@ libraries/
 # Local IDE and workspace state
 .settings/
 .headless-workspace/
+.project
+.cproject
+Lcf_Tasking_Tricore_Tc.lsl
 
 # Python cache and local tooling output
 __pycache__/
