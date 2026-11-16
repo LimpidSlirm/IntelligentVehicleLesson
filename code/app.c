@@ -1,49 +1,74 @@
 #include "app.h"
+#include "camera.h"
 #include "chassis.h"
 #include "key.h"
 #include "motor.h"
 #include "servo.h"
 #include "speed.h"
-#include "motion.h"
 
 #pragma section all "cpu0_dsram"
 
-#define CHASSIS_TEST_MODE_NUM  (3U)
-#define CHASSIS_TEST_SPEED     (300)
+/* The display is switched to landscape before init, so the usable area is
+   160 x 128 and the 188x120 frame is scaled to 160x102. */
+#define APP_IMAGE_WIDTH    (160U)
+#define APP_IMAGE_HEIGHT   (102U)
+#define APP_IMAGE_Y        (0U)
 
-static uint8 chassis_test_mode;
 static char uart_command[32];
 static uint8 uart_command_length;
-static int16 displayed_servo_angle;
-
-static void app_uart_show_status(const char *status)
-{
-    tft180_set_color(RGB565_GREEN, RGB565_BLACK);
-    tft180_show_string(0, 32, "UART0 115200");
-    tft180_show_string(0, 48, status);
-}
+static uint8 image_binary_mode;
+static uint8 image_display_dirty;
+static uint32 displayed_frame_count;
 
 static void app_uart_send_status(void)
 {
-    uart_write_string(UART_0, "STATUS DRIVE=DISABLED\r\n");
+    uart_write_string(UART_0,
+                      (image_binary_mode != 0U) ? "STATUS MODE=BIN\r\n"
+                                                : "STATUS MODE=GRAY\r\n");
 }
 
-static void app_update_servo_display(void)
+static void app_update_image_display(void)
 {
-    int16 angle = servo_get_current_angle();
+    const uint8 *image;
+    uint32 frame_count;
+    uint8 threshold;
 
-    displayed_servo_angle = angle;
-    tft180_set_color(RGB565_GREEN, RGB565_BLACK);
-    tft180_show_string(0, 64, "CMD");
-    tft180_show_int(24, 64, angle, 3);
-    tft180_show_string(64, 64, "TGT");
-    tft180_show_int(88, 64, servo_get_target_angle(), 3);
+    frame_count = camera_otsu_get_frame_count();
+    if(frame_count == 0U)
+    {
+        return;
+    }
+
+    if((frame_count == displayed_frame_count) && (image_display_dirty == 0U))
+    {
+        return;
+    }
+
+    displayed_frame_count = frame_count;
+    image_display_dirty = 0U;
+    threshold = camera_otsu_get_threshold();
+    image = camera_otsu_get_image();
+
+    /* threshold 0 draws the raw gray frame; non-zero draws a binary frame. */
+    if(image_binary_mode != 0U)
+    {
+        tft180_show_gray_image(0, APP_IMAGE_Y, image,
+                               camera_otsu_get_width(),
+                               camera_otsu_get_height(),
+                               APP_IMAGE_WIDTH, APP_IMAGE_HEIGHT,
+                               (threshold == 0U) ? (uint8)1 : threshold);
+    }
+    else
+    {
+        tft180_show_gray_image(0, APP_IMAGE_Y, image,
+                               camera_otsu_get_width(),
+                               camera_otsu_get_height(),
+                               APP_IMAGE_WIDTH, APP_IMAGE_HEIGHT, 0U);
+    }
 }
 
 static void app_uart_process_byte(uint8 data)
 {
-    app_uart_show_status("RX DATA");
-
     if(data == '\r' || data == '\n')
     {
         if(uart_command_length == 0U)
@@ -55,17 +80,14 @@ static void app_uart_process_byte(uint8 data)
         if(strcmp(uart_command, "PING") == 0)
         {
             uart_write_string(UART_0, "PONG\r\n");
-            app_uart_show_status("PING OK");
         }
         else if(strcmp(uart_command, "STATUS") == 0)
         {
             app_uart_send_status();
-            app_uart_show_status("STATUS OK");
         }
         else
         {
             uart_write_string(UART_0, "ERR UNKNOWN_COMMAND\r\n");
-            app_uart_show_status("CMD ERR");
         }
         uart_command_length = 0;
     }
@@ -96,25 +118,34 @@ static void app_uart_task(void)
 
 void app_init(void)
 {
+    /* Direction must be selected before init: init writes the 0x36 register
+       from the current direction and refreshes the width/height limits. */
+    tft180_set_dir(TFT180_CROSSWISE);
     tft180_init();
     tft180_set_color(RGB565_GREEN, RGB565_BLACK);
-    tft180_show_string(0, 0, "E01 GPIO DEMO");
-    tft180_show_string(0, 16, "BOOT OK");
-    tft180_show_string(0, 32, "UART0 115200");
-    tft180_show_string(0, 48, "WAIT PING");
+    tft180_clear();
     uart_command_length = 0;
-    uart_write_string(UART_0, "BOOT OK\r\n");
+    uart_write_string(UART_0, "BOOT\r\n");
 
     key_module_init();
-    chassis_test_mode = 0U;
     motor_init();
     speed_control_init();
     servo_init();
     chassis_init();
-    chassis_center_steering();
-    chassis_stop_immediate();
-    displayed_servo_angle = (int16)-1;
-    app_update_servo_display();
+
+    image_binary_mode = 0U;
+    image_display_dirty = 1U;
+    displayed_frame_count = 0U;
+
+    if(camera_otsu_init() == 0U)
+    {
+        uart_write_string(UART_0, "CAM OK\r\n");
+    }
+    else
+    {
+        uart_write_string(UART_0, "CAM ERR\r\n");
+        tft180_show_string(0, 40, "CAM ERR");
+    }
 
     /* The PIT scans keys and updates the motor ramp every millisecond. */
     pit_ms_init(CCU60_CH0, 1);
@@ -125,38 +156,20 @@ void app_task(void)
     key_event_enum event;
 
     app_uart_task();
-    app_update_servo_display();
+    camera_otsu_task();
+    app_update_image_display();
+
+    event = key_module_get_event(KEY_4);
+    if(event == KEY_EVT_SHORT || event == KEY_EVT_LONG)
+    {
+        image_binary_mode = (uint8)!image_binary_mode;
+        image_display_dirty = 1U;
+    }
 
     event = key_module_get_event(KEY_2);
     if(event == KEY_EVT_SHORT || event == KEY_EVT_LONG)
     {
         chassis_stop_immediate();
-        chassis_test_mode = 0U;
-    }
-
-    event = key_module_get_event(KEY_4);
-    if(event == KEY_EVT_SHORT || event == KEY_EVT_LONG)
-    {
-        chassis_test_mode++;
-        if(chassis_test_mode >= CHASSIS_TEST_MODE_NUM)
-        {
-            chassis_test_mode = 0U;
-        }
-
-        if(chassis_test_mode == 1U)
-        {
-            chassis_set_wheel_speed(-CHASSIS_TEST_SPEED,
-                                    CHASSIS_TEST_SPEED);
-        }
-        else if(chassis_test_mode == 2U)
-        {
-            chassis_set_wheel_speed(CHASSIS_TEST_SPEED,
-                                    -CHASSIS_TEST_SPEED);
-        }
-        else
-        {
-            chassis_stop_ramped();
-        }
     }
 }
 

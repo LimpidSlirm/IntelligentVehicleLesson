@@ -65,6 +65,9 @@ code/
     servo.c/.h               舵机接口 / Servo interface
     pid.c/.h                 PID 算法 / PID algorithm
     key.c/.h                 按键模块 / Key module
+    led.c/.h                 LED 模块 / LED module
+    camera.c/.h              摄像头采集与阈值 / Camera capture and threshold
+    otsu.c/.h                Otsu 阈值算法 / Otsu threshold algorithm
     motion.h                 运动接口 / Motion interface
 
 user/
@@ -157,6 +160,57 @@ Increase the target speed gradually and observe whether the measured speed follo
 
 The controller should start smoothly, track speed changes, avoid continuous acceleration at steady state, keep both wheel directions consistent, and stop when the target is cleared.
 
+### 5. 摄像头图像与 Otsu 阈值试跑 | Camera Image and Otsu Trial
+
+当前固件用于调试摄像头，不驱动电机。屏幕改为横屏（160×128），摄像头 188×120 灰度图缩放到 160×102 全屏显示，不叠加任何文字。
+
+The current firmware is for camera debugging and does not drive the motors. The display is switched to landscape (160×128), and the 188x120 gray frame is scaled to 160x102 with no text overlay.
+
+```text
+KEY4  灰度图 / 二值图 切换
+KEY2  立即停止两轮（安全兜底，平时不会有动作）
+```
+
+二值化直接复用 Otsu 阈值：库函数 `tft180_show_gray_image()` 的最后参数为 0 输出灰阶，非 0 按该阈值输出黑白。
+
+The binary view reuses the Otsu threshold: `tft180_show_gray_image()` draws grayscale when its last argument is 0 and binarizes with that value otherwise.
+
+串口 115200 8N1，上电输出 `BOOT` 和 `CAM OK` / `CAM ERR`，可发送 `PING`、`STATUS`。
+
+UART0 runs at 115200 8N1 and prints `BOOT` plus `CAM OK` / `CAM ERR`. `PING` and `STATUS` are accepted.
+
+预期现象：
+
+| 场景 | 预期 |
+|---|---|
+| 正常出图 | 灰度图有实时噪点，二值图黑白分明、边线连续 |
+| 遮挡镜头 | 二值图接近全黑（阈值趋近 0） |
+| 强光/白纸 | 二值图接近全白（阈值偏高） |
+| 图像横向撕裂 | 整屏刷新耗时约 20 ms，期间新帧写入缓冲区，调试可接受 |
+| 一直 `CAM ERR` | 摄像头未接、供电不足或排线松动 |
+
+Expected behavior:
+
+| Scene | Expectation |
+|---|---|
+| Normal capture | Live noise on the gray view, clean black/white edges on the binary view |
+| Lens covered | Binary view nearly all black (threshold near 0) |
+| Bright light or white paper | Binary view nearly all white (threshold high) |
+| Horizontal tearing | Full-screen refresh takes about 20 ms while a new frame is written; acceptable for debugging |
+| Persistent `CAM ERR` | Camera not connected, insufficient power, or a loose cable |
+
+已知约束：
+
+1. 屏幕方向必须在 `tft180_init()` 之前用 `tft180_set_dir()` 设定，否则 0x36 (MADCTL) 寄存器仍是旧方向。
+2. 画面完全均匀时 Otsu 返回 0，因为没有任何阈值能同时得到两个非空类。
+3. 单一全局阈值无法处理透视造成的不均匀光照，后续需要分区阈值或限定 ROI。
+
+Known constraints:
+
+1. The direction must be set with `tft180_set_dir()` before `tft180_init()`, otherwise the 0x36 (MADCTL) register keeps the old orientation.
+2. A perfectly uniform frame yields 0, because no threshold produces two non-empty classes.
+3. A single global threshold cannot handle illumination gradients caused by perspective; region-wise thresholds or a restricted ROI are needed later.
+
 ## 软件架构 | Software Architecture
 
 项目采用分层和接口化设计：
@@ -199,36 +253,6 @@ KD = 0
 这些参数只适用于当前硬件和测试条件。更换电机、负载、供电或编码器后，需要重新验证和整定。
 
 These values are specific to the current hardware and test conditions. Retune and verify the controller after changing the motors, load, power supply, or encoders.
-
-### 5. 底盘按键测试（舵机回中） | Chassis Key Test (Servo Centered)
-
-当前测试固件使用 KEY4 测试底盘，舵机固定回中，KEY3 不使用，KEY2 为立即停止。首次测试时必须让驱动轮离地：
-
-The test firmware uses KEY4 for chassis testing, centers the servo, does not use KEY3, and assigns KEY2 to emergency stop. Keep the drive wheels off the ground during the first test:
-
-```text
-KEY4 短按第 1 次：停止 -> 原地左转
-KEY4 短按第 2 次：原地左转 -> 原地右转
-KEY4 短按第 3 次：原地右转 -> 停止
-KEY2 短按或长按：立即停止
-测试速度：300
-```
-
-建议测试顺序：
-
-1. 上电后确认舵机回到 90°，驱动轮不转。
-2. 驱动轮离地，短按 KEY4，确认两轮原地左转。
-3. 短按 KEY4，确认两轮原地右转。
-4. 短按 KEY4，确认两轮停止。
-5. 任意异常时按 KEY2；仍异常时立即断电。
-
-Recommended order:
-
-1. Confirm that the servo centers at 90° and the drive wheels remain stopped after power-on.
-2. Keep the drive wheels off the ground and press KEY4 once to verify an in-place left turn.
-3. Press KEY4 again to verify an in-place right turn.
-4. Press KEY4 again to verify a stop.
-5. Press KEY2 for any abnormal behavior, and remove power if necessary.
 
 ## 协作与提交 | Collaboration and Commits
 
