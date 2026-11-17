@@ -35,6 +35,9 @@
 
 #include "isr_config.h"
 #include "isr.h"
+#include "app.h"
+
+volatile uint32 wifi_int_count = 0;
 #include "key.h"
 #include "motor.h"
 #include "speed.h"
@@ -51,6 +54,7 @@ IFX_INTERRUPT(cc60_pit_ch0_isr, 0, CCU6_0_CH0_ISR_PRIORITY)
 
     interrupt_global_enable(0);                     // �����ж�Ƕ��
     pit_clear_flag(CCU60_CH0);
+    app_pit_1ms();
 
     key_module_scan();                              // ����ɨ�裨״̬��������
     motor_update();
@@ -136,6 +140,9 @@ IFX_INTERRUPT(exti_ch1_ch5_isr, 0, EXTI_CH1_CH5_INT_PRIO)
     if(exti_flag_get(ERU_CH5_REQ1_P15_8))           // ͨ��5�ж�
     {
         exti_flag_clear(ERU_CH5_REQ1_P15_8);
+
+        wifi_int_count++;
+        wireless_module_spi_handler();
 
     }
 }

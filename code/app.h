@@ -8,5 +8,6 @@ void app_init(void);
 
 /* Handle key events in the main loop. */
 void app_task(void);
+void app_pit_1ms(void);
 
 #endif
